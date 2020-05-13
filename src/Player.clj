@@ -2,16 +2,59 @@
   (:gen-class))
 
 ; Grab the pellets as fast as you can!
+(def raw-text "#################################\n#####   #     # # #     #   #####\n##### ##### # # # # # ##### #####\n#           #       #           #\n# # # # # # # ##### # # # # # # #\n# #   #   # #   #   # #   #   # #\n# # ### ### ### # ### ### ### # #\n# #                           # #\n### # ##### ### # ### ##### # ###\n#   #   #   ### # ###   #   #   #\n# # ### # # ### # ### # # ### # #\n# #       #           #       # #\n### ### # ### ##### ### # ### ###\n#################################")
+
+(def test-rows (vec (seq (.split raw-text "\n"))))
 
 (defn output [msg] (println msg) (flush))
 (defn debug [msg] (binding [*out* *err*] (println msg) (flush)))
 
-(def grid (atom []))
+(def small-test-rows
+  "#####\n#   #\n#####")
+
+(def small-rows (vec (.split small-test-rows "\n")))
+
+(def small-grid (atom small-rows))
+
+(def grid (atom @small-grid))
 (def waypoints (atom []))
 (def destination (atom []))
 
+(defn coordinated-grid []
+  (->> @grid
+       (map-indexed (fn [row-index row]
+                      (map-indexed (fn [col-index col] [col-index row-index col]) row)))
+       (apply concat)
+       vec))
+
+(def static-neighbours-coordinates-set
+  (->> (for [i (range -1 2)
+             j (range -1 2)]
+         [i j])
+       (filter #(not= [0 0] %))
+       set))
+
+(defn neighbours-coordinates [[x0 y0]]
+  (-> (map (fn [[x y]] [(+ x0 x) (+ y0 y)]) static-neighbours-coordinates-set)
+      set))
+
+(defn tile-coord [[tx ty _]]
+  [tx ty])
+
+(defn is-neighbour [tile coord]
+  (contains? (neighbours-coordinates (tile-coord tile)) coord))
+
+(defn find-neighbours [coord]
+  (let [grid (coordinated-grid)]
+    (filter #(is-neighbour % coord) grid)))
+
 (defn is-wall [tile] (= tile \#))
 (defn is-free-space [tile] (= tile \space))
+(defn is-tile-free [[_ _ tile]] (is-free-space tile))
+
+(defn find-free-neighbours [coord]
+  (->> (find-neighbours coord)
+       (filter is-tile-free)))
 
 (defn indexed-cols [row]
   (map-indexed (fn [index column] [index column]) row))
@@ -39,6 +82,10 @@
 (defn move-to [id [x y]]
   (output (str "MOVE " id " " x " " y)))
 
+(let [vertices (set (filter is-tile-free (coordinated-grid)))
+      edges (map (fn [tile] (find-free-neighbours (tile-coord tile))) vertices)]
+  edges)
+
 (defn -main [& args]
   (let [width (read) height (read) _ (read-line)]
     ; width: size of the grid
@@ -47,8 +94,6 @@
     (reset! waypoints [(top-left-corner)
                        (bottom-right-corner)])
     (reset! destination (first @waypoints))
-    (debug (str "waypoints: " @waypoints))
-    (debug (str "destination: " @destination))
     (while true
       (let [myScore (read) opponentScore (read) visiblePacCount (read) _ (read-line)
             pacman-pos (atom [0 0])]

@@ -1,0 +1,4 @@
+# Run all tests from REPL
+(require '[clojure.test :refer [run-tests]])
+(require 'Player-test :reload-all)
+(run-tests 'Player-test)
