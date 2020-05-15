@@ -16,7 +16,7 @@
 
 (def small-grid (atom small-rows))
 
-(def grid (atom @small-grid))
+(def grid (atom test-rows))
 (def waypoints (atom []))
 (def destination (atom []))
 
@@ -82,9 +82,33 @@
 (defn move-to [id [x y]]
   (output (str "MOVE " id " " x " " y)))
 
-(let [vertices (set (filter is-tile-free (coordinated-grid)))
-      edges (map (fn [tile] (find-free-neighbours (tile-coord tile))) vertices)]
-  edges)
+(defn vertices [] (set (filter is-tile-free (coordinated-grid))))
+(defn edges [] (->> (vertices)
+                    (map (fn [vertex] [vertex (find-free-neighbours (tile-coord vertex))]))
+                    (map (fn [[vertex neighbours]]
+                           (for [n neighbours]
+                             [(tile-coord vertex) (tile-coord n)])))
+                    (apply concat)
+                    set))
+(defn graph [] [(vertices), (edges)])
+
+(defn visited? [vertex visited]
+  (contains? (set visited) vertex))
+
+;; From http://dnaeon.github.io/graphs-and-clojure/
+(defn graph-dfs []
+  (let [[vertices edges] (graph)]
+    (loop [stack (vec vertices)
+           visited []]
+      (if (empty? stack)
+        visited
+        (let [vertex (peek stack)
+              neighbours (find-free-neighbours (tile-coord vertex))
+              not-visited (filter (complement #(visited? % visited)) neighbours)
+              new-stack (into (pop stack) not-visited)]
+          (if (visited? vertex visited)
+            (recur new-stack visited)
+            (recur new-stack (conj visited vertex))))))))
 
 (defn -main [& args]
   (let [width (read) height (read) _ (read-line)]
