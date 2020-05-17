@@ -113,6 +113,45 @@
        keys
        (reduce simplify-vertex graph)))
 
+(def medium-graph (build-graph (vec (.split "#####\n#   #\n## ##\n## ##\n#   #\n## ##\n#####" "\n"))))
+
+(def debug-graph (build-graph (vec (.split "#################################\n###   #     # ##### #     #   ###\n### # # ### # ##### # ### # # ###\n#   # #   #   #####   #   # #   #\n# ### # # # # ##### # # # # ### #\n#   #   #   #       #   #   #   #\n### # # ### ### # ### ### # # ###\n      #     #   #   #     #      \n### # ##### # # # # # ##### # ###\n#   #         #   #         #   #\n# # ##### ### # # # ### ##### # #\n#################################" "\n"))))
+
+(def max-path-length 7)
+(defn find-paths
+  ([graph position]
+   (find-paths graph [] [position] position max-path-length))
+  ([graph paths current-path position moves-left]
+   (let [visited (set current-path)
+         neighbours (->> (get graph position)
+                         (filter #(not (contains? visited %))))]
+     (if (or (= moves-left 0) (empty? neighbours))
+       [current-path]
+       (vec (mapcat (fn [neighbour]
+                      (find-paths graph paths
+                                  (conj current-path neighbour)
+                                  neighbour
+                                  (- moves-left 1)))
+                    neighbours))))))
+
+(defn calc-coord-pellets-value [pellets coords]
+  (reduce
+    (fn [sum coord]
+      (let [pellets-value (get pellets coord)
+            value (if (nil? pellets-value) 0 pellets-value)]
+        (+ sum value)))
+    0 coords))
+
+(defn find-next-waypoint [graph pellets position]
+  (->> (find-paths graph position)
+       (map (fn [coords] {:coord coords
+                          :points (calc-coord-pellets-value pellets coords)}))
+       (sort-by :points)
+       reverse
+       first
+       :coord
+       last))
+
 (defn at-destination [[pos-x pos-y] [x y]]
   (and (= pos-x x) (= pos-y y)))
 
@@ -132,31 +171,36 @@
         ; abilityCooldown: unused in wood leagues
         (recur (dec i))))))
 
-(defn update-pellets []
-  (let [visiblePelletCount (read)]
-    ; visiblePelletCount: all pellets in sight
-    (loop [i visiblePelletCount]
-      (when (> i 0)
-        (let [x (read) y (read) value (read) _ (read-line)]
-          ; value: amount of points this pellet is worth
-          (recur (dec i))))))
+(defn read-pellet []
+  (let [x (read) y (read) value (read) _ (read-line)]
+    [[x y] value]))
 
-  (defn -main [& args]
-    (let [width (read) height (read) _ (read-line)
-          grid (repeatedly height read-line)
-          graph (-> (build-graph grid) simplify-graph)
-          nodes (graph-dfs graph)]
-      (debug grid)
-      (loop [destination (first nodes)
-             waypoints (rest nodes)]
-        (let [my-score (read)
-              opponent-score (read)
-              visible-pac-count (read)
-              _ (read-line)
-              pacman-pos (atom [])]
-          (update-pac-positions visible-pac-count pacman-pos)
-          (update-pellets)
-          (move-to! 0 destination)
-          (if (at-destination @pacman-pos destination)
-            (recur (first waypoints) (rest waypoints))
-            (recur destination waypoints)))))))
+(defn read-pellets []
+  (let [visible-pellet-count (read)]
+    (->> (repeatedly visible-pellet-count read-pellet)
+         vec
+         (into {}))))
+
+(defn -main [& args]
+  (let [width (read) height (read) _ (read-line)
+        grid (repeatedly height read-line)
+        graph (-> (build-graph grid) simplify-graph)
+        nodes (graph-dfs graph)
+        pacman-pos (atom [0 0])]
+    (debug grid)
+    (loop [destination nil]
+      (debug (str "destination " destination))
+      (let [my-score (read)
+            opponent-score (read)
+            visible-pac-count (read)
+            _ (read-line)]
+        (update-pac-positions visible-pac-count pacman-pos)
+        (let [pellets (read-pellets)
+              dest (if (nil? destination)
+                     (find-next-waypoint graph pellets @pacman-pos)
+                     destination)]
+          (debug (str "pellets " pellets))
+          (move-to! 0 dest)
+          (if (at-destination @pacman-pos dest)
+            (recur (find-next-waypoint graph pellets @pacman-pos))
+            (recur dest)))))))
